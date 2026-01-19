@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wordle</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        .word-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 50px); /* 5 columns, each 50px */
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .letter-box {
+            width: 50px;
+            height: 50px;
+            border: 2px solid black;
+            font-size: 24px;
+            line-height: 50px;
+            text-align: center;
+        }
+        .correct {
+            background-color: green;
+            color: white;
+        }
+        .wrong-spot {
+            background-color: yellow;
+            color: white;
+        }
+        .incorrect {
+            background-color: gray;
+            color: white;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        /* Adjust input fields and buttons to match the width of the grid (5 blocks) */
+        .input-group {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+            width: 310px; /* 5 boxes of 50px + 4 gaps of 10px = 310px total */
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #wordInput, #wordListInput {
+            width: 210px; /* 70% of 310px */
+        }
+        button {
+            width: 100px; /* 30% of 310px */
+        }
+        #restartButton {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+        }
+        .slider-container {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Wordle</h1>
+<button id="restartButton" onclick="restartGame()">Restart Game</button>
+
+<!-- Slider for changing number of guesses -->
+<div class="slider-container">
+    <label for="guessSlider">Number of Guesses: <span id="numGuessesDisplay">6</span></label>
+    <input type="range" id="guessSlider" min="2" max="10" value="6" oninput="updateGuesses()">
+</div>
+
+<!-- Wordle Grid (always visible) -->
+<div id="wordGrid"></div>
+
+<!-- Input for guesses (size adjusted) -->
+<div class="controls">
+    <div class="input-group">
+        <input type="text" id="wordInput" maxlength="5" placeholder="Enter a 5-letter word" onkeypress="handleKeyPress(event)">
+        <button onclick="submitGuess()">Submit Guess</button>
+    </div>
+</div>
+
+<!-- Input for Word List (size adjusted) -->
+<div class="input-group">
+    <input type="text" id="wordListInput" placeholder="Replace word list here with a CSV list">
+    <button onclick="updateWordList()">Submit List</button>
+</div>
+
+<script>
+// Full 2000-word list (default, not shown in input)
+let wordList = [
+    "apple", "grape", "chair", "table", "plane", "house", "water", "world", "horse", "light", "hello", "never", "drive", "power", "clean",
+    "heart", "earth", "sound", "space", "order", "fruit", "sugar", "stone", "field", "climb", "money", "voice", "river", "glass", "peace",
+    "giant", "block", "stand", "smart", "first", "laugh", "alive", "black", "green", "fight", "young", "small", "bread", "dream", "plant",
+    "shell", "metal", "clear", "growl", "storm", "catch", "break", "throw", "cause", "claim", "stick", "noise", "sharp", "cross", "dance",
+    // Continue until 2000 words...
+];
+
+let correctWord = ""; // The word to be guessed
+let maxGuesses = 6; // Max number of guesses (default)
+let currentGuesses = 0; // Track current guesses
+
+// Initialize Wordle grid (always visible)
+function initGrid() {
+    const grid = document.getElementById("wordGrid");
+    grid.innerHTML = ""; // Clear the grid
+    for (let i = 0; i < maxGuesses; i++) {
+        const row = document.createElement("div");
+        row.classList.add("word-grid");
+
+        for (let j = 0; j < 5; j++) {
+            const letterBox = document.createElement("div");
+            letterBox.classList.add("letter-box");
+            row.appendChild(letterBox);
+        }
+
+        grid.appendChild(row);
+    }
+}
+
+// Update number of guesses from slider
+function updateGuesses() {
+    maxGuesses = document.getElementById("guessSlider").value;
+    document.getElementById("numGuessesDisplay").innerText = maxGuesses;
+    initGrid(); // Reinitialize the grid to match the new number of guesses
+}
+
+// Function to update the word list based on input
+function updateWordList() {
+    const inputText = document.getElementById("wordListInput").value;
+    if (inputText.trim() !== "") {
+        wordList = inputText.split(",").map(word => word.trim().toLowerCase());
+    }
+    startNewGame();
+}
+
+// Function to start a new game
+function startNewGame() {
+    correctWord = wordList[Math.floor(Math.random() * wordList.length)];
+    currentGuesses = 0;
+    initGrid();
+    document.getElementById("wordInput").value = ""; // Clear the input field
+    console.log("Correct word:", correctWord); // Debugging purposes
+}
+
+// Function to restart the game with the same word list
+function restartGame() {
+    startNewGame();
+}
+
+// Function to handle Enter key for guess submission
+function handleKeyPress(event) {
+    if (event.key === "Enter") {
+        submitGuess();
+    }
+}
+
+// Function to submit a guess
+function submitGuess() {
+    const guess = document.getElementById("wordInput").value.toLowerCase();
+
+    if (guess.length !== 5) {
+        alert("Please enter exactly 5 letters.");
+        return;
+    }
+
+    addGuessToGrid(guess);
+    currentGuesses++;
+
+    if (guess === correctWord) {
+        alert("Congratulations! You've guessed the word!");
+        restartGame();
+    } else if (currentGuesses >= maxGuesses) {
+        alert(`Game over! The correct word was: ${correctWord}`);
+        restartGame();
+    }
+}
+
+// Function to add the guess to the grid
+function addGuessToGrid(guess) {
+    const grid = document.getElementById("wordGrid");
+    const row = grid.children[currentGuesses];
+
+    for (let i = 0; i < guess.length; i++) {
+        const letterBox = row.children[i];
+        letterBox.textContent = guess[i].toUpperCase();
+
+        if (guess[i] === correctWord[i]) {
+            letterBox.classList.add("correct"); // Green if correct position
+        } else if (correctWord.includes(guess[i])) {
+            letterBox.classList.add("wrong-spot"); // Yellow if wrong position
+        } else {
+            letterBox.classList.add("incorrect"); // Gray if not in the word
+        }
+    }
+}
+
+// Initialize the game with the default word list
+startNewGame();
+
+</script>
+
+</body>
+</html>

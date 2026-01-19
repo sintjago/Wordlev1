@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Jeu Wordle en Français</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    #game-board {
+      display: grid;
+      grid-template-columns: repeat(5, 50px);
+      gap: 5px;
+      margin: 20px 0;
+    }
+    .letter-box {
+      width: 50px;
+      height: 50px;
+      border: 1px solid #ccc;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      text-transform: uppercase;
+    }
+    .correct {
+      background-color: green;
+      color: white;
+    }
+    .misplaced {
+      background-color: yellow;
+      color: black;
+    }
+    .wrong {
+      background-color: gray;
+      color: white;
+    }
+    #word-input, #word-list-input {
+      width: 160px;
+      padding: 5px;
+    }
+    #submit-btn, #start-game-btn, #reset-btn {
+      padding: 5px 10px;
+      margin-top: 10px;
+      margin-right: 5px;
+    }
+    #word-list-area {
+      margin-top: 10px;
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #csv-controls {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin-top: 5px;
+    }
+    #scoreboard {
+      margin-top: 10px;
+    }
+    #guessed-words {
+      margin-top: 20px;
+      max-width: 500px;
+    }
+    #guessed-words span {
+      margin: 3px;
+      padding: 5px 8px;
+      background-color: #e0e0e0;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Jeu Wordle en Français</h1>
+
+  <div id="scoreboard">
+    <strong>Score :</strong> <span id="score">0</span> |
+    <strong>Vies :</strong> <span id="lives">3</span> |
+    <strong>Mots trouvés :</strong> <span id="correct-count">0</span>
+  </div>
+
+  <div id="game-board"></div>
+
+  <div>
+    <input type="text" id="word-input" maxlength="5" placeholder="Tapez un mot" />
+    <button id="submit-btn">Valider</button>
+    <button id="reset-btn">Réinitialiser</button>
+  </div>
+
+  <p id="message"></p>
+
+  <div id="word-list-area">
+    <label for="word-list-input">Entrez une liste de mots séparés par des virgules :</label>
+    <div id="csv-controls">
+      <input type="text" id="word-list-input" placeholder="ex : table, chien, livre" />
+      <button id="start-game-btn">Démarrer</button>
+    </div>
+  </div>
+
+  <div id="guessed-words">
+    <strong>Mots trouvés :</strong><br>
+    <div id="guessed-list"></div>
+  </div>
+
+  <script>
+    const defaultWords = [
+  "avion", "beurre", "coeur", "jaune", "livre", "table", "chien", "chat", "sucre", "pomme",
+  "fleur", "blanc", "noir", "rouge", "boire", "venir", "aimer", "aller", "utile", "fruit",
+  "neige", "école", "forêt", "objet", "poire", "glace", "train", "élève", "rayon", "photo",
+  "arbre", "oiseau", "robot", "drôle", "angle", "grève", "piste", "piano", "conte", "geler",
+  "rater", "génie", "pâte", "bague", "grive", "sable", "crème", "verre", "faute", "doigt",
+  "musée", "rêve", "bouge", "lourd", "agile", "large", "place", "cloche", "douze", "terre",
+  "vague", "règle", "trier", "prier", "élite", "noble", "ombre", "jambe", "ongle", "verbe",
+  "style", "tenue", "pluie", "image", "boîte", "folie", "vivre", "garde", "voler", "fidèle",
+  "parti", "ouvre", "paire", "porte", "carte", "mouet", "poche", "plage", "lampe", "singe",
+  "soupe", "souris", "pains", "rival", "fiche", "bille", "perle", "bête", "mange", "crier"
+];
+    let wordList = [...defaultWords];
+    let secretWord = '';
+    let currentGuess = '';
+    let guessCount = 0;
+    const maxGuesses = 6;
+    let score = 0;
+    let lives = 3;
+    let correctWords = 0;
+
+    const gameBoard = document.getElementById('game-board');
+    const wordInput = document.getElementById('word-input');
+    const message = document.getElementById('message');
+    const scoreDisplay = document.getElementById('score');
+    const livesDisplay = document.getElementById('lives');
+    const correctCountDisplay = document.getElementById('correct-count');
+    const guessedList = document.getElementById('guessed-list');
+
+    function speak(text) {
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'fr-FR';
+      speechSynthesis.cancel();
+      speechSynthesis.speak(utter);
+    }
+
+    function startNewWord() {
+      secretWord = wordList[Math.floor(Math.random() * wordList.length)];
+      resetBoard();
+      guessCount = 0;
+      console.log('Mot secret :', secretWord); // pour le débogage
+    }
+
+    document.getElementById('start-game-btn').addEventListener('click', () => {
+      const input = document.getElementById('word-list-input').value.trim();
+      if (input) {
+        wordList = input.split(',').map(w => w.trim().toLowerCase()).filter(w => w.length === 5);
+        document.getElementById('word-list-input').value = '';
+      } else {
+        wordList = [...defaultWords];
+      }
+      score = 0;
+      lives = 3;
+      correctWords = 0;
+      updateStats();
+      guessedList.innerHTML = '';
+      startNewWord();
+      message.textContent = '';
+    });
+
+    document.getElementById('reset-btn').addEventListener('click', () => {
+      score = 0;
+      lives = 3;
+      correctWords = 0;
+      guessedList.innerHTML = '';
+      updateStats();
+      startNewWord();
+      message.textContent = '';
+    });
+
+    document.getElementById('submit-btn').addEventListener('click', () => {
+      currentGuess = wordInput.value.trim().toLowerCase();
+      if (currentGuess.length !== 5) {
+        message.textContent = 'Veuillez entrer un mot de 5 lettres.';
+        return;
+      }
+
+      speak(currentGuess);
+      checkGuess(currentGuess);
+      wordInput.value = '';
+    });
+
+    function resetBoard() {
+      gameBoard.innerHTML = '';
+      for (let i = 0; i < maxGuesses * 5; i++) {
+        const box = document.createElement('div');
+        box.classList.add('letter-box');
+        gameBoard.appendChild(box);
+      }
+    }
+
+    function updateStats() {
+      scoreDisplay.textContent = score;
+      livesDisplay.textContent = lives;
+      correctCountDisplay.textContent = correctWords;
+    }
+
+    function addGuessedWord(word) {
+      const span = document.createElement('span');
+      span.textContent = word.toUpperCase();
+      span.onclick = () => speak(word);
+      guessedList.appendChild(span);
+    }
+
+    function checkGuess(guess) {
+      const boxes = document.querySelectorAll('.letter-box');
+      const startIndex = guessCount * 5;
+      for (let i = 0; i < 5; i++) {
+        const letterBox = boxes[startIndex + i];
+        const letter = guess[i];
+        letterBox.textContent = letter;
+
+        if (letter === secretWord[i]) {
+          letterBox.classList.add('correct');
+        } else if (secretWord.includes(letter)) {
+          letterBox.classList.add('misplaced');
+        } else {
+          letterBox.classList.add('wrong');
+        }
+      }
+
+      guessCount++;
+
+      if (guess === secretWord) {
+        const pointsEarned = 700 - guessCount * 100;
+        score += pointsEarned;
+        correctWords++;
+        if (correctWords % 5 === 0) lives++;
+        updateStats();
+        addGuessedWord(guess);
+        message.textContent = `Bravo ! +${pointsEarned} points. Nouveau mot en cours...`;
+        setTimeout(startNewWord, 1000);
+      } else if (guessCount === maxGuesses) {
+        lives--;
+        message.textContent = `Perdu ! Le mot était : ${secretWord}`;
+        if (lives > 0) {
+          setTimeout(startNewWord, 1500);
+        } else {
+          message.textContent += " Vous n'avez plus de vies.";
+        }
+        updateStats();
+      }
+    }
+
+    startNewWord();
+  </script>
+
+</body>
+</html>

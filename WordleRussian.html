@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Русская игра Wordle</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    #game-board {
+      display: grid;
+      grid-template-columns: repeat(5, 50px);
+      gap: 5px;
+      margin: 20px 0;
+    }
+    .letter-box {
+      width: 50px;
+      height: 50px;
+      border: 1px solid #ccc;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      text-transform: uppercase;
+    }
+    .correct {
+      background-color: green;
+      color: white;
+    }
+    .misplaced {
+      background-color: yellow;
+      color: black;
+    }
+    .wrong {
+      background-color: gray;
+      color: white;
+    }
+    #word-input, #word-list-input {
+      width: 160px;
+      padding: 5px;
+    }
+    #submit-btn, #start-game-btn, #reset-btn {
+      padding: 5px 10px;
+      margin-top: 10px;
+      margin-right: 5px;
+    }
+    #word-list-area {
+      margin-top: 10px;
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #csv-controls {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin-top: 5px;
+    }
+    #scoreboard {
+      margin-top: 10px;
+    }
+    #guessed-words {
+      margin-top: 20px;
+      max-width: 500px;
+    }
+    #guessed-words span {
+      margin: 3px;
+      padding: 5px 8px;
+      background-color: #e0e0e0;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Русская игра Wordle</h1>
+
+  <div id="scoreboard">
+    <strong>Очки:</strong> <span id="score">0</span> |
+    <strong>Жизни:</strong> <span id="lives">3</span> |
+    <strong>Угаданные слова:</strong> <span id="correct-count">0</span>
+  </div>
+
+  <div id="game-board"></div>
+
+  <div>
+    <input type="text" id="word-input" maxlength="5" placeholder="Введите слово" />
+    <button id="submit-btn">Проверить</button>
+    <button id="reset-btn">Сбросить</button>
+  </div>
+
+  <p id="message"></p>
+
+  <div id="word-list-area">
+    <label for="word-list-input">Введите слова через запятую:</label>
+    <div id="csv-controls">
+      <input type="text" id="word-list-input" placeholder="например: мать, зима, вода" />
+      <button id="start-game-btn">Начать</button>
+    </div>
+  </div>
+
+  <div id="guessed-words">
+    <strong>Угаданные слова:</strong><br>
+    <div id="guessed-list"></div>
+  </div>
+
+  <script>
+    const defaultWords = [
+  "автор", "акция", "банка", "бочка", "билет", "берег", "время", "врата", "весна", "взвод",
+  "газон", "груша", "город", "гость", "дверь", "доска", "душно", "дядяй", "жизнь", "завод",
+  "звонк", "игрок", "измен", "кабан", "камин", "карта", "катер", "кисть", "книга", "князь",
+  "кошка", "кукла", "курсы", "лампа", "лидер", "лодка", "лукав", "маска", "маякн", "метод",
+  "мечта", "молек", "мороз", "музей", "мышка", "набор", "наука", "нельзя", "ночью", "образ",
+  "объем", "огонь", "около", "опора", "орден", "осень", "парус", "песня", "петух", "пилас",
+  "племя", "повар", "полка", "пыльц", "птица", "работ", "радар", "разум", "ранок", "рекаа",
+  "речьт", "риска", "ручей", "рыбак", "салат", "света", "север", "серый", "силач", "скала",
+  "слово", "смело", "снегов", "сосна", "спина", "старт", "стиль", "стена", "страх", "судно",
+  "сумка", "ткань", "толпа", "точка", "туман", "уголь", "улица", "филин", "форма", "хвост"
+];
+
+    let wordList = [...defaultWords];
+    let secretWord = '';
+    let currentGuess = '';
+    let guessCount = 0;
+    const maxGuesses = 6;
+    let score = 0;
+    let lives = 3;
+    let correctWords = 0;
+
+    const gameBoard = document.getElementById('game-board');
+    const wordInput = document.getElementById('word-input');
+    const message = document.getElementById('message');
+    const scoreDisplay = document.getElementById('score');
+    const livesDisplay = document.getElementById('lives');
+    const correctCountDisplay = document.getElementById('correct-count');
+    const guessedList = document.getElementById('guessed-list');
+
+    function speak(text) {
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'ru-RU';
+      speechSynthesis.cancel();
+      speechSynthesis.speak(utter);
+    }
+
+    function startNewWord() {
+      secretWord = wordList[Math.floor(Math.random() * wordList.length)];
+      resetBoard();
+      guessCount = 0;
+      console.log('Секретное слово:', secretWord); // для отладки
+    }
+
+    document.getElementById('start-game-btn').addEventListener('click', () => {
+      const input = document.getElementById('word-list-input').value.trim();
+      if (input) {
+        wordList = input.split(',').map(w => w.trim().toLowerCase()).filter(w => w.length === 5);
+        document.getElementById('word-list-input').value = '';
+      } else {
+        wordList = [...defaultWords];
+      }
+      score = 0;
+      lives = 3;
+      correctWords = 0;
+      updateStats();
+      guessedList.innerHTML = '';
+      startNewWord();
+      message.textContent = '';
+    });
+
+    document.getElementById('reset-btn').addEventListener('click', () => {
+      score = 0;
+      lives = 3;
+      correctWords = 0;
+      guessedList.innerHTML = '';
+      updateStats();
+      startNewWord();
+      message.textContent = '';
+    });
+
+    document.getElementById('submit-btn').addEventListener('click', () => {
+      currentGuess = wordInput.value.trim().toLowerCase();
+      if (currentGuess.length !== 5) {
+        message.textContent = 'Введите слово из 5 букв!';
+        return;
+      }
+
+      speak(currentGuess);
+      checkGuess(currentGuess);
+      wordInput.value = '';
+    });
+
+    function resetBoard() {
+      gameBoard.innerHTML = '';
+      for (let i = 0; i < maxGuesses * 5; i++) {
+        const box = document.createElement('div');
+        box.classList.add('letter-box');
+        gameBoard.appendChild(box);
+      }
+    }
+
+    function updateStats() {
+      scoreDisplay.textContent = score;
+      livesDisplay.textContent = lives;
+      correctCountDisplay.textContent = correctWords;
+    }
+
+    function addGuessedWord(word) {
+      const span = document.createElement('span');
+      span.textContent = word.toUpperCase();
+      span.onclick = () => speak(word);
+      guessedList.appendChild(span);
+    }
+
+    function checkGuess(guess) {
+      const boxes = document.querySelectorAll('.letter-box');
+      const startIndex = guessCount * 5;
+      for (let i = 0; i < 5; i++) {
+        const letterBox = boxes[startIndex + i];
+        const letter = guess[i];
+        letterBox.textContent = letter;
+
+        if (letter === secretWord[i]) {
+          letterBox.classList.add('correct');
+        } else if (secretWord.includes(letter)) {
+          letterBox.classList.add('misplaced');
+        } else {
+          letterBox.classList.add('wrong');
+        }
+      }
+
+      guessCount++;
+
+      if (guess === secretWord) {
+        const pointsEarned = 700 - guessCount * 100;
+        score += pointsEarned;
+        correctWords++;
+        if (correctWords % 5 === 0) lives++;
+        updateStats();
+        addGuessedWord(guess);
+        message.textContent = `Правильно! +${pointsEarned} очков. Новое слово.`;
+        setTimeout(startNewWord, 1000);
+      } else if (guessCount === maxGuesses) {
+        lives--;
+        message.textContent = `Игра окончена! Слово было: ${secretWord}`;
+        if (lives > 0) {
+          setTimeout(startNewWord, 1500);
+        } else {
+          message.textContent += " У вас не осталось жизней!";
+        }
+        updateStats();
+      }
+    }
+
+    startNewWord();
+  </script>
+
+</body>
+</html>
